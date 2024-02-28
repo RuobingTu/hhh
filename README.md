@@ -1,15 +1,16 @@
 # hhh
+The framework is based on https://github.com/ucsd-hep-ex/hhh.
 
-## 1. Pull and start the Docker container
+## 1. Pull and start the Docker container(On lxplus, we use singularity)
 ```bash
 docker pull jmduarte/hhh
-docker run -it jmduarte/hhh bash
+singularity shell --bind /eos/user/r/rtu:/outdir1 --bind /afs/cern.ch/user/r/rtu:/outputdir /eos/user/r/rtu/hhh_latest.sif
 ```
 
 ## 2. Check out the GitHub repository
 ```bash
 cd work
-git clone https://github.com/ucsd-hep-ex/hhh
+git@github.com:RuobingTu/hhh_spanet_conversion.git
 ```
 
 ## 3. Install the Python package(s)
@@ -19,38 +20,42 @@ pip install -e .
 cd ..
 ```
 
-## 4. Copy and convert the dataset(s)
-Copy the Delphes ROOT TTree datasets from:
-- CERN EOS: `/eos/user/m/mstamenk/CxAOD31run/hhh-6b/delphes-samples/GF_HHH_SM_c3_0_d4_0_14TeV/sample_*.root`, or
-- UCSD UAF: `/ceph/cms/store/user/woodson/GF_HHH_SM_c3_0_d4_0_14TeV/sample_*.root`
+## 4. Convert the dataset(s)
+Copy the ROOT TTree datasets from:
+- CERN EOS: `/eos/user/r/rtu/public/inputs-2017/inclusive-weights/HHHTo4B2Tau_c3_0_d4_0_TuneCP5_13TeV-amcatnlo-pythia8_tree.root`
 
-to the `data/delphes/v2/GF_HHH_SM_c3_0_d4_0_14TeV` directory
 
 Convert to training and testing HDF5 files.
 ```bash
-python -m src.data.delphes.convert_to_h5 data/delphes/v2/GF_HHH_SM_c3_0_d4_0_14TeV/sample_*.root --out-file data/delphes/v2/hhh_training.h5
-python -m src.data.delphes.convert_to_h5 data/delphes/v2/GF_HHH_SM_c3_0_d4_0_14TeV/sample_*.root --out-file data/delphes/v2/hhh_testing.h5
+python -m src.data.cms.convert_to_h5_jetpair_PNet.py HHHTo4B2Tau_c3_0_d4_0_TuneCP5_13TeV-amcatnlo-pythia8_tree.root --out-file hhh_training.h5
 ```
 
 ## 5. Run the SPANet training
 Override options file with `--gpus 0` if no GPUs are available.
 ```bash
-python -m spanet.train -of options_files/delphes/hhh_v2.json [--gpus 0]
+python -m spanet.train -of options_files/cms/HHH_4b2tau_classification.json [--gpus 0]
+```
+you need to modify the input file and event information path like below.
+```
+    "event_info_file": "/hpcfs/cms/cmsgpu/turuobing/HHH_4b2tau_classification.yaml",
+    "training_file": "/hpcfs/cms/cmsgpu/turuobing/HHH_QurdJetTrigger_jetpair_PNet_training_random.h5",
+    "trial_output_dir": "/hpcfs/cms/cmsgpu/turuobing/HHH_output_PNet_classification_new",
+```
+
+since I add the classification part in 'HHH_4b2tau_classification.json', if we don't add any background, we need to modify the hyperparameter to zero.
+```
+  "classification_loss_scale": 0,
 ```
 
 ## 6. Evaluate the SPANet training
 Assuming the output log directory is `spanet_output/version_0`.
 Add `--gpu` if a GPU is available.
 ```bash
-python -m spanet.test spanet_output/version_0 -tf data/delphes/v2/hhh_testing.h5 [--gpu]
+python -m spanet.test spanet_output/version_0 -tf hhh_testing.h5 [--gpu]
 ```
 
-## 7. Evaluate the baseline method
-```bash
-python -m src.models.test_baseline --test-file data/delphes/v2/hhh_testing.h5
-```
 
-# Instructions for CMS data set baseline
+# Instructions for CMS data set baseline(It's Marko's early work, has done before 2023/11)
 The CMS dataset was updated to run with the `v26` setup (`nAK4 >= 4 and HLT selection`). The update includes the possibility to apply the b-jet energy correction. By keeping events with at a least 4 jets, the boosted training can be performed on a maximum number of events and topologies.
 
 List of samples (currently setup validated using 2018):
